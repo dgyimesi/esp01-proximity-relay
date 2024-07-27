@@ -6,7 +6,9 @@ Want a discrete light switch which can be operated by reaching out to your light
 Forgot to switch off the bathroom mirror light, but too lazy to get up from the bed?
 Here you go.
 
-Enclosure is WIP (STLs come later).
+WIP:
+- wiring diagram
+- Enclosure STL model files
 
 ## What you need
 
