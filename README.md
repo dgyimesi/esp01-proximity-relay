@@ -8,6 +8,8 @@ Here you go.
 
 <img src="img/esp01-proximity-relay-assembled-02.jpg" alt="Installed ESP01 Proximity Relay" style="width: 256px;"/>
 
+See more [here](img/).
+
 WIP:
 - wiring diagram
 
