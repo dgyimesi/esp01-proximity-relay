@@ -1,6 +1,7 @@
 #include <ESP8266WiFi.h>
 #include <MKL_HCSR04.h>
 
+// Debug: setting to false enables RX/TX as relay I/O, otherwise RX/TX is used for serial monitor.
 #define DEBUG false
 
 #if DEBUG == true
@@ -11,21 +12,30 @@
 #define DEBUG_PRINTLN(x)
 #endif
 
+// WiFi
 #define WIFI_SSID "v3rys3cr3t"
 #define WIFI_PASSWORD "v3rys3cr3t"
 #define WIFI_HTTP_PORT 80
 #define WIFI_STATUS_CHECK_INTERVAL 1000
 
+// Relay
 #define RELAY_PIN 0
 #define RELAY_STATE_DEFAULT HIGH
 #define RELAY_MODULE_NAME "Bathroom Mirror Light"
 
-#define DISTANCE_MEASUREMENT_INTERVAL_MS 250
+// Measurement
+// NOTE: each measurement can take ~25ms + 75ms delay added to prevent trigger to echo leakage.
+// Use multiple measurements (DISTANCE_MEASUREMENT_COUNT > 1) if you experience inaccuracies.
+// Otherwise go with 250ms (DISTANCE_MEASUREMENT_INTERVAL_MS) to get a nice responsivity.
+#define DISTANCE_MEASUREMENT_COUNT 3
+#define DISTANCE_MEASUREMENT_INTERVAL_MS 0
 #define DISTANCE_TRIGGER_ZONE_CM 25
 #define DISTANCE_SENSOR_PIN_TRIGGER 1
 #define DISTANCE_SENSOR_PIN_ECHO 3
 
+// Prepare for var!
 unsigned long timeNow = 0;
+unsigned long timeSinceLastTrigger = 0;
 unsigned long timeReportDistance = 0;
 
 int relayState = RELAY_STATE_DEFAULT;
@@ -34,7 +44,8 @@ bool isApiRequest = false;
 bool isLocked = false;
 
 float distance = 0;
-float lastDistance = 0;
+float lastMeasuredDistance = 0;
+float lastTriggerDistance = 0;
 
 WiFiServer server(WIFI_HTTP_PORT);
 MKL_HCSR04 hc(DISTANCE_SENSOR_PIN_TRIGGER, DISTANCE_SENSOR_PIN_ECHO);
@@ -66,13 +77,13 @@ void setup() {
 
 void loop() {
   timeNow = millis();
-
+  
   // Evaluating distance from sensor.
   checkDistance();
 
   // /off: switches the relay OFF.
   // /on:  switches the relay ON.
-  // /api: returns relay state and measured distance in cms.
+  // /api: returns relay state, measured distance (cm), seconds since last trigger and last trigger distance (cm).
   handleRequests();
 }
 
@@ -86,7 +97,7 @@ void setupWifi() {
   WiFi.persistent(true);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(1000);
 
     DEBUG_PRINT(".");
   }
@@ -125,10 +136,25 @@ void setupWifi() {
 
 void checkDistance() {
   if (timeNow - timeReportDistance >= DISTANCE_MEASUREMENT_INTERVAL_MS) {
-    distance = hc.dist();
+    distance = 0;
+    
+    // Doing average because reported distance tends to fluctuate no matter the delay set between measurements.
+    unsigned long timeMeasurementStart = millis();
+    for (int i = 0; i < DISTANCE_MEASUREMENT_COUNT; i++) {
+      distance += hc.dist();
 
-    bool approaching = distance - lastDistance < 0;
-    bool receding = distance - lastDistance > 0;
+      delay(75);
+    }
+    unsigned long timeMeasurementEnd = millis();
+    
+    DEBUG_PRINT("Measurement took ");
+    DEBUG_PRINT(timeMeasurementEnd - timeMeasurementStart);
+    DEBUG_PRINTLN(" ms");
+
+    distance /= DISTANCE_MEASUREMENT_COUNT;
+    
+    bool approaching = distance - lastMeasuredDistance < 0;
+    bool receding = distance - lastMeasuredDistance > 0;
 
     // Check if toggle isLocked can be opened (hand left the trigger zone).
     if (isLocked) {
@@ -143,9 +169,12 @@ void checkDistance() {
 
       // isLocked state until hand left is in the trigger zone [0cm, DISTANCE_TRIGGER_ZONE_CM].
       isLocked = true;
+
+      lastTriggerDistance = distance;
+      timeSinceLastTrigger = timeNow;
     }
 
-    lastDistance = distance;
+    lastMeasuredDistance = distance;
 
     timeReportDistance = timeNow;
 
@@ -162,7 +191,7 @@ void handleRequests() {
 
   // Wait until the client sends some data.
   while (!client.available()) {
-    delay(100);
+    delay(1);
   }
 
   DEBUG_PRINTLN("New client");
@@ -183,6 +212,9 @@ void handleRequests() {
     DEBUG_PRINTLN("Turning relay on");
 
     relayState = LOW;
+
+    timeSinceLastTrigger = timeNow;
+
     digitalWrite(RELAY_PIN, relayState);
   }
 
@@ -190,6 +222,9 @@ void handleRequests() {
     DEBUG_PRINTLN("Turning relay off");
 
     relayState = HIGH;
+
+    timeSinceLastTrigger = timeNow;
+
     digitalWrite(RELAY_PIN, relayState);
   }
 
@@ -202,9 +237,13 @@ void handleRequests() {
 
   if (isApiRequest) {
     client.print("{ \"relayState\": ");
-    client.print(relayState == HIGH ? "true" : "false");
+    client.print(relayState == LOW ? "true" : "false");
     client.print(", \"distance\": ");
     client.print(distance);
+    client.print(", \"lastTriggerDistance\": ");
+    client.print(lastTriggerDistance);
+    client.print(", \"timeSinceLastTrigger\": ");
+    client.print((int)((timeNow - timeSinceLastTrigger) / 1000));
     client.print(" }");
   } else {
     client.println("<!DOCTYPE HTML>");

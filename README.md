@@ -18,15 +18,16 @@ WIP:
 - Arduino Studio
 - ESP8266-01
 - JoyIt ESP-01S relay module (or clone)
+- HC-SR04-4P ultrasonic distance sensor
 - CH340 TTL-UART programmer (ideally with the flash button)
 - soldering station
 - some wires rated for your load
 - (optional) Wago connectors
 - (optional) 3D printer
 
-## Build
+## Configuration
 
-TODO
+Check out comments in the header section.
 
 ## Enclosure
 
