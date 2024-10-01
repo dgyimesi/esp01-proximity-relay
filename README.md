@@ -29,6 +29,14 @@ WIP:
 
 Check out comments in the header section.
 
+## API
+
+| Endpoint | Action |
+| -------- | ------ |
+| /on      | Closes the relay |
+| /off     | Opens the relay  |
+| /api     | ```{ "relayState": false, "distance": 64.89, "lastTriggerDistance": 22.48, "timeSinceLastTrigger": 274 }``` |
+
 ## Enclosure
 
 If you happen to have [the same bathroom mirror lights](https://www.obi.at/zubehoer-fuer-spiegel/maximus-led-spiegelleuchte-esther-50-cm-schwarz/p/8040370) as me, knock yourself out.
